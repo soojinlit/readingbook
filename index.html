@@ -12,11 +12,13 @@
     --bg: #e8e2d6; --card: #f5f1e8; --header: #3a3428;
     --text: #2c2418; --muted: #8a7e68; --border: #c9c0ae;
     --accent: #5a7a3a; --accent-light: #a8c488; --row-hover: #f0ece2;
+    --tab-bg: #ece7da; --sub-bg: #ece7da; --goal-bg: #2e2820;
+    --search-bg: #faf8f2; --detail-bg: #eee9dc; --sum-bg: #ece7da;
     --mono: 'DotGothic16', 'Courier New', monospace;
     --serif: 'Gowun Batang', 'Georgia', serif;
   }
-  body { background:var(--bg); font-family:var(--serif); min-height:100vh; padding:12px; display:flex; justify-content:center; }
-  input:focus, select:focus { outline:none; border-color:#5a4e3e !important; }
+  body { background:var(--bg); font-family:var(--serif); min-height:100vh; padding:12px; display:flex; justify-content:center; transition:background .3s; }
+  input:focus, select:focus { outline:none; border-color:var(--accent) !important; }
   ::-webkit-scrollbar { width:4px; }
   ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
   input[type="date"]::-webkit-calendar-picker-indicator { cursor:pointer; opacity:.5; }
@@ -28,18 +30,17 @@
   .row-item { animation:slideIn .3s ease both; transition:background .1s; }
   .row-item:hover { background:var(--row-hover) !important; cursor:pointer; }
   .search-card { transition:all .12s; cursor:pointer; }
-  .search-card:hover { background:#eae5d8 !important; }
+  .search-card:hover { background:var(--row-hover) !important; }
   .blink-dot { animation:blink 1s infinite; }
 
   .wrap { width:100%; max-width:560px; }
-  .input { width:100%; padding:7px 9px; border:1px solid #b8b0a0; border-radius:3px; font-size:13px; background:#faf8f2; font-family:var(--mono); color:var(--text); }
-  .btn { border:none; border-radius:4px; font-family:var(--mono); font-weight:700; cursor:pointer; transition:background .15s; }
-  .btn-primary { background:var(--header); color:#d4c9a8; }
-  .btn-primary:hover { background:#4a4438; }
+  .input { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:3px; font-size:13px; background:var(--search-bg); font-family:var(--mono); color:var(--text); transition:border-color .15s; }
+  .btn { border:none; border-radius:4px; font-family:var(--mono); font-weight:700; cursor:pointer; transition:background .15s, opacity .15s; }
+  .btn-primary { background:var(--header); color:rgba(255,255,255,.85); }
+  .btn-primary:hover { opacity:.85; }
   .btn-ghost { background:none; color:var(--muted); border:1px solid var(--border); }
-  .btn-accent { background:var(--accent); color:#e8dfc0; }
+  .btn-accent { background:var(--accent); color:rgba(255,255,255,.9); }
 
-  /* 모바일 최적화 */
   @media (max-width: 480px) {
     body { padding:6px; }
     .grid-row { grid-template-columns: 68px 1fr 64px 76px !important; }
@@ -55,40 +56,78 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 const STORAGE_KEY = "reading_passbook_data";
-const KEY_STORAGE = "reading_passbook_ttb";
+const KEY_STORAGE  = "reading_passbook_ttb";
+const THEME_KEY    = "reading_passbook_theme";
 
+// ─── 테마 정의 ───
+const THEMES = {
+  retro: {
+    name:"레트로", dot:"#8a7e68",
+    vars:{ "--bg":"#e8e2d6","--card":"#f5f1e8","--header":"#3a3428","--text":"#2c2418",
+           "--muted":"#8a7e68","--border":"#c9c0ae","--accent":"#5a7a3a","--accent-light":"#a8c488",
+           "--row-hover":"#f0ece2","--tab-bg":"#ece7da","--sub-bg":"#ece7da","--goal-bg":"#2e2820",
+           "--search-bg":"#faf8f2","--detail-bg":"#eee9dc","--sum-bg":"#ece7da" },
+  },
+  mint: {
+    name:"민트", dot:"#40916c",
+    vars:{ "--bg":"#e8f5ef","--card":"#ffffff","--header":"#2d6a4f","--text":"#1b3a2d",
+           "--muted":"#6b9080","--border":"#b7d5c8","--accent":"#40916c","--accent-light":"#95d5b2",
+           "--row-hover":"#f0faf5","--tab-bg":"#d8ede5","--sub-bg":"#d8ede5","--goal-bg":"#1a4535",
+           "--search-bg":"#f6fcf9","--detail-bg":"#e8f5ef","--sum-bg":"#d8ede5" },
+  },
+  lavender: {
+    name:"라벤더", dot:"#7c4dbd",
+    vars:{ "--bg":"#ede8f8","--card":"#faf9fe","--header":"#4a3780","--text":"#2d1b55",
+           "--muted":"#8b7fb0","--border":"#d0c5ed","--accent":"#7c4dbd","--accent-light":"#c4a8e8",
+           "--row-hover":"#f3f0fb","--tab-bg":"#e2daf5","--sub-bg":"#e2daf5","--goal-bg":"#2e1f5e",
+           "--search-bg":"#f8f6fd","--detail-bg":"#ede8f8","--sum-bg":"#e2daf5" },
+  },
+  terra: {
+    name:"테라", dot:"#d97745",
+    vars:{ "--bg":"#fef3e8","--card":"#fffcf7","--header":"#c05e3a","--text":"#3d2414",
+           "--muted":"#a07850","--border":"#ead5b8","--accent":"#d97745","--accent-light":"#f0b08a",
+           "--row-hover":"#fef8f0","--tab-bg":"#f5e8d4","--sub-bg":"#f5e8d4","--goal-bg":"#7a3018",
+           "--search-bg":"#fffdf9","--detail-bg":"#fef3e8","--sum-bg":"#f5e8d4" },
+  },
+  sky: {
+    name:"스카이", dot:"#2b7cb8",
+    vars:{ "--bg":"#e8f1fb","--card":"#ffffff","--header":"#1e3a5f","--text":"#1a2f4a",
+           "--muted":"#5a7a9a","--border":"#bfdbfe","--accent":"#2b7cb8","--accent-light":"#90cdf4",
+           "--row-hover":"#eff6ff","--tab-bg":"#d8ebf8","--sub-bg":"#d8ebf8","--goal-bg":"#0f2040",
+           "--search-bg":"#f5faff","--detail-bg":"#e8f1fb","--sum-bg":"#d8ebf8" },
+  },
+};
+
+function applyTheme(key) {
+  const t = THEMES[key]; if(!t) return;
+  Object.entries(t.vars).forEach(([k,v]) => document.documentElement.style.setProperty(k,v));
+  try { localStorage.setItem(THEME_KEY, key); } catch {}
+}
+// 초기 테마 적용
+applyTheme((() => { try { return localStorage.getItem(THEME_KEY)||"retro"; } catch { return "retro"; } })());
+
+// ─── 데이터 ───
 function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
+  try { const r = localStorage.getItem(STORAGE_KEY); if(r) return JSON.parse(r); } catch {}
   return {
     books: [
-      { id:1, date:"2026-01-05", title:"채식주의자", author:"한강", publisher:"창비", isbn:"9788936434595", price:12000 },
-      { id:2, date:"2026-01-18", title:"작별하지 않는다", author:"한강", publisher:"문학동네", isbn:"9788954682152", price:14000 },
-      { id:3, date:"2026-02-03", title:"불편한 편의점", author:"김호연", publisher:"나무옆의자", isbn:"9791161571188", price:14000 },
-      { id:4, date:"2026-02-14", title:"아몬드", author:"손원평", publisher:"창비", isbn:"9788936434267", price:12000 },
-      { id:5, date:"2026-02-28", title:"달러구트 꿈 백화점", author:"이미예", publisher:"팩토리나인", isbn:"9791165341909", price:13800 },
-      { id:6, date:"2026-03-07", title:"역행자", author:"자청", publisher:"웅진지식하우스", isbn:"9788901260716", price:17500 },
+      { id:1, date:"2026-01-05", title:"채식주의자",        author:"한강",  publisher:"창비",         isbn:"9788936434595", price:12000 },
+      { id:2, date:"2026-01-18", title:"작별하지 않는다",   author:"한강",  publisher:"문학동네",      isbn:"9788954682152", price:14000 },
+      { id:3, date:"2026-02-03", title:"불편한 편의점",     author:"김호연",publisher:"나무옆의자",    isbn:"9791161571188", price:14000 },
+      { id:4, date:"2026-02-14", title:"아몬드",            author:"손원평",publisher:"창비",          isbn:"9788936434267", price:12000 },
+      { id:5, date:"2026-02-28", title:"달러구트 꿈 백화점",author:"이미예",publisher:"팩토리나인",    isbn:"9791165341909", price:13800 },
+      { id:6, date:"2026-03-07", title:"역행자",            author:"자청",  publisher:"웅진지식하우스",isbn:"9788901260716", price:17500 },
     ],
-    nextId: 7,
-    goalType: "amount",
-    goalValue: 500000,
+    nextId:7, goalType:"amount", goalValue:500000,
   };
 }
+function saveData(d) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch {} }
 
-function saveData(data) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
-}
-
-const fp = (n) => n.toLocaleString("ko-KR");
-const fdShort = (d) => {
-  const dt = new Date(d);
-  return `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,"0")}.${String(dt.getDate()).padStart(2,"0")}`;
-};
+const fp = n => n.toLocaleString("ko-KR");
+const fdShort = d => { const [y,m,day]=d.split('-'); return `${y}.${m}.${day}`; };
 
 function searchAladin(query, ttbKey) {
   return new Promise((resolve, reject) => {
@@ -96,7 +135,7 @@ function searchAladin(query, ttbKey) {
     const script = document.createElement("script");
     const timeout = setTimeout(() => { cleanup(); reject(new Error("timeout")); }, 8000);
     function cleanup() { clearTimeout(timeout); delete window[cb]; if(script.parentNode) script.parentNode.removeChild(script); }
-    window[cb] = (data) => { cleanup(); resolve(data?.item || []); };
+    window[cb] = data => { cleanup(); resolve(data?.item||[]); };
     const p = new URLSearchParams({ ttbkey:ttbKey, Query:query, QueryType:"Title", MaxResults:"5", start:"1", SearchTarget:"Book", output:"js", Version:"20131101", Cover:"Big" });
     script.src = `https://www.aladin.co.kr/ttb/api/ItemSearch.aspx?${p}&callback=${cb}`;
     script.onerror = () => { cleanup(); reject(new Error("err")); };
@@ -104,58 +143,75 @@ function searchAladin(query, ttbKey) {
   });
 }
 
+// ─── App ───
 function App() {
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem(THEME_KEY)||"retro"; } catch { return "retro"; } });
+  const switchTheme = key => { setTheme(key); applyTheme(key); };
+
   const stored = useRef(loadData());
-  const [books, setBooks] = useState(stored.current.books);
-  const [nid, setNid] = useState(stored.current.nextId);
+  const [books,    setBooks]    = useState(stored.current.books);
+  const [nid,      setNid]      = useState(stored.current.nextId);
   const [goalType, setGoalType] = useState(stored.current.goalType);
-  const [goalValue, setGoalValue] = useState(stored.current.goalValue);
+  const [goalValue,setGoalValue]= useState(stored.current.goalValue);
 
-  const [ttbKey, setTtbKey] = useState(() => { try { return sessionStorage.getItem(KEY_STORAGE)||""; } catch { return ""; } });
-  const [keyInput, setKeyInput] = useState("");
-  const [keyVerified, setKeyVerified] = useState(!!ttbKey);
-  const [keyError, setKeyError] = useState("");
-  const [verifying, setVerifying] = useState(false);
+  const [ttbKey,      setTtbKey]      = useState(() => { try { return sessionStorage.getItem(KEY_STORAGE)||""; } catch { return ""; } });
+  const [keyInput,    setKeyInput]    = useState("");
+  const [keyVerified, setKeyVerified] = useState(!!(() => { try { return sessionStorage.getItem(KEY_STORAGE); } catch { return null; } })());
+  const [keyError,    setKeyError]    = useState("");
+  const [verifying,   setVerifying]   = useState(false);
 
-  const [showForm, setShowForm] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [activeView, setActiveView] = useState('list');
+  const [statsYear,  setStatsYear]  = useState(new Date().getFullYear());
+
+  const [showForm,      setShowForm]      = useState(false);
+  const [searchQuery,   setSearchQuery]   = useState("");
   const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState("");
-  const [formDate, setFormDate] = useState(new Date().toISOString().slice(0,10));
+  const [searching,     setSearching]     = useState(false);
+  const [searchError,   setSearchError]   = useState("");
+  const [formDate,      setFormDate]      = useState(new Date().toISOString().slice(0,10));
   const [animatedTotal, setAnimatedTotal] = useState(0);
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [manualMode, setManualMode] = useState(false);
+  const [selectedBook,  setSelectedBook]  = useState(null);
+  const [manualMode,    setManualMode]    = useState(false);
   const [editingDateId, setEditingDateId] = useState(null);
-  const [manualForm, setManualForm] = useState({ title:"", author:"", publisher:"", isbn:"", price:"", date:new Date().toISOString().slice(0,10) });
-  const [showGoalEdit, setShowGoalEdit] = useState(false);
-  const [tempGoalType, setTempGoalType] = useState(goalType);
+  const [manualForm,    setManualForm]    = useState({ title:"",author:"",publisher:"",isbn:"",price:"",date:new Date().toISOString().slice(0,10) });
+  const [showGoalEdit,  setShowGoalEdit]  = useState(false);
+  const [tempGoalType,  setTempGoalType]  = useState(goalType);
   const [tempGoalValue, setTempGoalValue] = useState(String(goalValue));
   const searchInputRef = useRef(null);
 
-  const total = books.reduce((s,b) => s+b.price, 0);
+  const total           = books.reduce((s,b)=>s+b.price,0);
   const currentProgress = goalType==="amount" ? total : books.length;
-  const progress = goalValue>0 ? Math.min((currentProgress/goalValue)*100,100) : 0;
-  const runningTotals = books.reduce((acc,b,i) => { acc.push((acc[i-1]||0)+b.price); return acc; }, []);
-  const goalLabel = goalType==="amount" ? `₩${fp(goalValue)}` : `${goalValue}권`;
+  const progress        = goalValue>0 ? Math.min((currentProgress/goalValue)*100,100) : 0;
+  const runningTotals   = books.reduce((acc,b,i)=>{ acc.push((acc[i-1]||0)+b.price); return acc; },[]);
+  const goalLabel       = goalType==="amount" ? `₩${fp(goalValue)}` : `${goalValue}권`;
 
-  // 자동 저장
-  useEffect(() => { saveData({ books, nextId:nid, goalType, goalValue }); }, [books, nid, goalType, goalValue]);
+  // 통계
+  const allYears = useMemo(()=>[...new Set(books.map(b=>b.date.slice(0,4)))].sort(),[books]);
+  const monthlyStats = useMemo(()=>{
+    const y=String(statsYear), map={};
+    for(let m=1;m<=12;m++){ const k=`${y}-${String(m).padStart(2,'0')}`; map[k]={month:m,count:0,total:0}; }
+    books.filter(b=>b.date.startsWith(y)).forEach(b=>{ const k=b.date.slice(0,7); if(map[k]){map[k].count++;map[k].total+=b.price;} });
+    return Object.values(map);
+  },[books,statsYear]);
+  const yearTotal     = useMemo(()=>monthlyStats.reduce((s,m)=>s+m.total,0),[monthlyStats]);
+  const yearCount     = useMemo(()=>monthlyStats.reduce((s,m)=>s+m.count,0),[monthlyStats]);
+  const maxMonthTotal = useMemo(()=>Math.max(...monthlyStats.map(s=>s.total),1),[monthlyStats]);
+  const activeMonths  = useMemo(()=>monthlyStats.filter(s=>s.count>0),[monthlyStats]);
 
-  useEffect(() => {
-    const steps=40; const inc=total/steps; let step=0;
-    const t=setInterval(() => { step++; setAnimatedTotal(Math.min(Math.round(inc*step),total)); if(step>=steps)clearInterval(t); },30);
-    return () => clearInterval(t);
-  }, [total]);
+  useEffect(()=>{ saveData({books,nextId:nid,goalType,goalValue}); },[books,nid,goalType,goalValue]);
+  useEffect(()=>{
+    const steps=40,inc=total/steps; let step=0;
+    const t=setInterval(()=>{ step++; setAnimatedTotal(Math.min(Math.round(inc*step),total)); if(step>=steps)clearInterval(t); },30);
+    return ()=>clearInterval(t);
+  },[total]);
 
   const verifyKey = async () => {
     if(!keyInput.trim()) return;
     setVerifying(true); setKeyError("");
     try {
       await searchAladin("테스트", keyInput.trim());
-      const k = keyInput.trim();
-      setTtbKey(k); setKeyVerified(true);
-      try { sessionStorage.setItem(KEY_STORAGE, k); } catch {}
+      const k=keyInput.trim(); setTtbKey(k); setKeyVerified(true);
+      try { sessionStorage.setItem(KEY_STORAGE,k); } catch {}
     } catch { setKeyError("키 인증에 실패했습니다. TTB 키를 확인해 주세요."); }
     setVerifying(false);
   };
@@ -166,260 +222,363 @@ function App() {
     try {
       const items = await searchAladin(searchQuery.trim(), ttbKey);
       if(!items.length) setSearchError("검색 결과가 없습니다.");
-      else setSearchResults(items.map(it => ({
-        title: (it.title||"").replace(/<[^>]*>/g,""),
-        author: (it.author||"").replace(/<[^>]*>/g,""),
-        publisher: it.publisher||"",
-        isbn: it.isbn13||it.isbn||"",
-        price: it.priceStandard||0,
-        cover: it.cover||"",
-        description: (it.description||"").replace(/<[^>]*>/g,""),
+      else setSearchResults(items.map(it=>({
+        title:(it.title||"").replace(/<[^>]*>/g,""), author:(it.author||"").replace(/<[^>]*>/g,""),
+        publisher:it.publisher||"", isbn:it.isbn13||it.isbn||"",
+        price:it.priceStandard||0, cover:it.cover||"",
       })));
     } catch { setSearchError("검색 중 오류가 발생했습니다."); }
     setSearching(false);
   };
 
-  const addFromResult = (r) => {
-    setBooks([...books, { id:nid, date:formDate, title:r.title, author:r.author, publisher:r.publisher, isbn:r.isbn, price:Number(r.price)||0 }]);
+  const addFromResult = r => {
+    setBooks([...books,{id:nid,date:formDate,title:r.title,author:r.author,publisher:r.publisher,isbn:r.isbn,price:Number(r.price)||0}]);
     setNid(nid+1); resetForm();
   };
-
   const addManual = () => {
     if(!manualForm.title||!manualForm.price) return;
-    setBooks([...books, { ...manualForm, id:nid, price:Number(manualForm.price) }]);
+    setBooks([...books,{...manualForm,id:nid,price:Number(manualForm.price)}]);
     setNid(nid+1); resetForm();
   };
-
   const resetForm = () => {
-    setShowForm(false); setSearchQuery(""); setSearchResults([]); setSearchError("");
-    setManualMode(false); setManualForm({ title:"",author:"",publisher:"",isbn:"",price:"",date:new Date().toISOString().slice(0,10) });
+    setShowForm(false); setSearchQuery(""); setSearchResults([]); setSearchError(""); setManualMode(false);
+    setManualForm({title:"",author:"",publisher:"",isbn:"",price:"",date:new Date().toISOString().slice(0,10)});
     setFormDate(new Date().toISOString().slice(0,10));
   };
-
-  const updateBookDate = (id,d) => { setBooks(books.map(b => b.id===id ? {...b,date:d} : b)); setEditingDateId(null); };
-  const deleteBook = (id) => { setBooks(books.filter(b => b.id!==id)); setSelectedBook(null); };
-  const saveGoal = () => { const v=Number(tempGoalValue); if(v>0){setGoalType(tempGoalType);setGoalValue(v);} setShowGoalEdit(false); };
+  const updateBookDate = (id,d) => { setBooks(books.map(b=>b.id===id?{...b,date:d}:b)); setEditingDateId(null); };
+  const deleteBook     = id    => { setBooks(books.filter(b=>b.id!==id)); setSelectedBook(null); };
+  const saveGoal       = ()    => { const v=Number(tempGoalValue); if(v>0){setGoalType(tempGoalType);setGoalValue(v);} setShowGoalEdit(false); };
 
   // ─── 키 입력 화면 ───
-  if (!keyVerified) {
-    return (
-      <div className="wrap" style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"90vh" }}>
-        <div style={{ width:"100%", maxWidth:400, background:var_card, borderRadius:12, border:`1px solid ${var_border}`, overflow:"hidden", boxShadow:"0 8px 30px rgba(0,0,0,.1)" }}>
-          <div style={{ background:var_header, padding:"20px 24px", textAlign:"center" }}>
-            <div style={{ fontFamily:"var(--mono)", fontSize:18, fontWeight:700, color:"#d4c9a8", letterSpacing:1 }}>독서통장</div>
-            <div style={{ fontFamily:"var(--mono)", fontSize:9, color:"#6a6050", letterSpacing:3, marginTop:4 }}>READING BANK</div>
+  if (!keyVerified) return (
+    <div className="wrap" style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"90vh"}}>
+      <div style={{width:"100%",maxWidth:400,background:"var(--card)",borderRadius:12,border:"1px solid var(--border)",overflow:"hidden",boxShadow:"0 8px 30px rgba(0,0,0,.1)"}}>
+        <div style={{background:"var(--header)",padding:"20px 24px",textAlign:"center"}}>
+          <div style={{fontFamily:"var(--mono)",fontSize:18,fontWeight:700,color:"rgba(255,255,255,.9)",letterSpacing:1}}>독서통장</div>
+          <div style={{fontFamily:"var(--mono)",fontSize:9,color:"rgba(255,255,255,.3)",letterSpacing:3,marginTop:4}}>READING BANK</div>
+        </div>
+        <div style={{padding:"28px 24px"}}>
+          <div style={{fontFamily:"var(--mono)",fontSize:12,color:"var(--text)",marginBottom:6}}>알라딘 TTB 키 입력</div>
+          <div style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--muted)",marginBottom:16,lineHeight:1.6}}>
+            도서 검색을 위해 알라딘 Open API 키가 필요합니다.<br/>키는 세션 스토리지에만 저장되며, 브라우저를 닫으면 사라집니다.
           </div>
-          <div style={{ padding:"28px 24px" }}>
-            <div style={{ fontFamily:"var(--mono)", fontSize:12, color:"#5a4e3e", marginBottom:6 }}>알라딘 TTB 키 입력</div>
-            <div style={{ fontFamily:"var(--mono)", fontSize:10, color:"#8a7e68", marginBottom:16, lineHeight:1.6 }}>
-              도서 검색을 위해 알라딘 Open API 키가 필요합니다.<br/>키는 세션 스토리지에만 저장되며, 브라우저를 닫으면 사라집니다.
-            </div>
-            <input type="password" className="input" placeholder="TTBxxxxxxxxxxxxxxxxx" value={keyInput}
-              onChange={e => setKeyInput(e.target.value)} onKeyDown={e => e.key==="Enter" && verifyKey()}
-              style={{ marginBottom:10, fontSize:14, padding:"10px 12px" }} />
-            {keyError && <div style={{ fontFamily:"var(--mono)", fontSize:11, color:"#a05030", marginBottom:10 }}>{keyError}</div>}
-            <button onClick={verifyKey} disabled={verifying} className="btn btn-primary" style={{ width:"100%", padding:11, fontSize:13 }}>
-              {verifying ? "확인 중..." : "인증하기"}
-            </button>
-            <button onClick={() => { setTtbKey(""); setKeyVerified(true); }} className="btn btn-ghost" style={{ width:"100%", marginTop:8, padding:9, fontSize:11 }}>
-              키 없이 시작 (직접 입력만 가능)
-            </button>
-          </div>
+          <input type="password" className="input" placeholder="TTBxxxxxxxxxxxxxxxxx" value={keyInput}
+            onChange={e=>setKeyInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&verifyKey()}
+            style={{marginBottom:10,fontSize:14,padding:"10px 12px"}} />
+          {keyError && <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--accent)",marginBottom:10}}>{keyError}</div>}
+          <button onClick={verifyKey} disabled={verifying} className="btn btn-primary" style={{width:"100%",padding:11,fontSize:13}}>
+            {verifying?"확인 중...":"인증하기"}
+          </button>
+          <button onClick={()=>{setTtbKey("");setKeyVerified(true);}} className="btn btn-ghost" style={{width:"100%",marginTop:8,padding:9,fontSize:11}}>
+            키 없이 시작 (직접 입력만 가능)
+          </button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
   // ─── 메인 ───
   return (
     <div className="wrap">
-      {/* 헤더 */}
-      <div style={{ background:"var(--header)", padding:"10px 16px", borderRadius:"8px 8px 0 0", borderBottom:"2px solid #5a5040" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-          <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-            <span style={{ fontFamily:"var(--mono)", fontSize:14, fontWeight:700, color:"#d4c9a8", letterSpacing:1 }}>독서통장</span>
-            <span style={{ fontFamily:"var(--mono)", fontSize:8, color:"#6a6050", letterSpacing:2 }}>READING BANK</span>
-          </div>
-          <div style={{ fontFamily:"var(--mono)", fontSize:18, fontWeight:700, color:"#e8dfc0" }}>₩{fp(animatedTotal)}</div>
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <div style={{ display:"flex", alignItems:"baseline", gap:6, flex:"0 0 auto" }}>
-            <span style={{ fontFamily:"var(--mono)", fontSize:14, fontWeight:700, color:"#d4c9a8" }}>{books.length}권</span>
-            <span style={{ fontFamily:"var(--mono)", fontSize:10, color:"#8a7e68" }}>독파</span>
-            <span style={{ fontFamily:"var(--mono)", fontSize:10, color:"#5a5040" }}>│</span>
-            <span style={{ fontFamily:"var(--mono)", fontSize:10, color:"#8a7e68" }}>목표</span>
-            <span style={{ fontFamily:"var(--mono)", fontSize:12, fontWeight:700, color:"#a8c488" }}>{goalLabel}</span>
-          </div>
-          <div style={{ flex:1, display:"flex", alignItems:"center", gap:6 }}>
-            <div style={{ flex:1, height:6, background:"rgba(255,255,255,.08)", borderRadius:3, overflow:"hidden" }}>
-              <div style={{ height:"100%", width:`${progress}%`, background:"linear-gradient(90deg,#6a8a4a,#a8c488)", borderRadius:3, transition:"width .8s ease" }} />
+
+      {/* ── 헤더 ── */}
+      <div style={{background:"var(--header)",padding:"10px 16px",borderRadius:"8px 8px 0 0",borderBottom:"2px solid rgba(0,0,0,.2)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+
+          {/* 타이틀 + 테마 스위처 */}
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+              <span style={{fontFamily:"var(--mono)",fontSize:14,fontWeight:700,color:"rgba(255,255,255,.9)",letterSpacing:1}}>독서통장</span>
+              <span style={{fontFamily:"var(--mono)",fontSize:8,color:"rgba(255,255,255,.3)",letterSpacing:2}}>READING BANK</span>
             </div>
-            <span style={{ fontFamily:"var(--mono)", fontSize:12, fontWeight:700, color:"#a8c488", minWidth:32, textAlign:"right" }}>{Math.round(progress)}%</span>
+            <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              {Object.entries(THEMES).map(([key,t]) => (
+                <button key={key} title={t.name} onClick={()=>switchTheme(key)} style={{
+                  width: theme===key?13:8, height: theme===key?13:8,
+                  borderRadius:"50%", padding:0, flexShrink:0, cursor:"pointer",
+                  background:t.dot, transition:"all .2s ease",
+                  border: theme===key?"2px solid rgba(255,255,255,.8)":"1.5px solid rgba(255,255,255,.2)",
+                  boxShadow: theme===key?`0 0 7px ${t.dot}90`:"none",
+                }} />
+              ))}
+            </div>
           </div>
-          <button onClick={() => { setTempGoalType(goalType); setTempGoalValue(String(goalValue)); setShowGoalEdit(!showGoalEdit); }}
-            style={{ background:"none", border:"1px solid #5a5040", borderRadius:3, padding:"2px 7px", fontFamily:"var(--mono)", fontSize:9, color:"#8a7e68", cursor:"pointer" }}>설정</button>
+
+          <div style={{fontFamily:"var(--mono)",fontSize:18,fontWeight:700,color:"rgba(255,255,255,.95)"}}>₩{fp(animatedTotal)}</div>
         </div>
+
+        {/* 권수 / 목표 / 진행바 */}
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:6,flex:"0 0 auto"}}>
+            <span style={{fontFamily:"var(--mono)",fontSize:14,fontWeight:700,color:"rgba(255,255,255,.9)"}}>{books.length}권</span>
+            <span style={{fontFamily:"var(--mono)",fontSize:10,color:"rgba(255,255,255,.4)"}}>독파</span>
+            <span style={{fontFamily:"var(--mono)",fontSize:10,color:"rgba(255,255,255,.2)"}}>│</span>
+            <span style={{fontFamily:"var(--mono)",fontSize:10,color:"rgba(255,255,255,.4)"}}>목표</span>
+            <span style={{fontFamily:"var(--mono)",fontSize:12,fontWeight:700,color:"var(--accent-light)"}}>{goalLabel}</span>
+          </div>
+          <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
+            <div style={{flex:1,height:6,background:"rgba(255,255,255,.1)",borderRadius:3,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${progress}%`,background:"linear-gradient(90deg,var(--accent),var(--accent-light))",borderRadius:3,transition:"width .8s ease"}} />
+            </div>
+            <span style={{fontFamily:"var(--mono)",fontSize:12,fontWeight:700,color:"var(--accent-light)",minWidth:32,textAlign:"right"}}>{Math.round(progress)}%</span>
+          </div>
+          <button onClick={()=>{setTempGoalType(goalType);setTempGoalValue(String(goalValue));setShowGoalEdit(!showGoalEdit);}}
+            style={{background:"none",border:"1px solid rgba(255,255,255,.2)",borderRadius:3,padding:"2px 7px",fontFamily:"var(--mono)",fontSize:9,color:"rgba(255,255,255,.5)",cursor:"pointer"}}>설정</button>
+        </div>
+
+        {/* 목표 설정 패널 */}
         {showGoalEdit && (
-          <div style={{ marginTop:10, padding:"10px 12px", background:"#2e2820", borderRadius:4, animation:"fadeIn .15s ease" }}>
-            <div style={{ fontFamily:"var(--mono)", fontSize:10, color:"#8a7e68", marginBottom:8 }}>연간 목표 설정</div>
-            <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-              <select value={tempGoalType} onChange={e => setTempGoalType(e.target.value)}
-                style={{ fontFamily:"var(--mono)", fontSize:12, background:"#3a3428", color:"#d4c9a8", border:"1px solid #5a5040", borderRadius:3, padding:"5px 8px" }}>
+          <div style={{marginTop:10,padding:"10px 12px",background:"var(--goal-bg)",borderRadius:4,animation:"fadeIn .15s ease"}}>
+            <div style={{fontFamily:"var(--mono)",fontSize:10,color:"rgba(255,255,255,.5)",marginBottom:8}}>연간 목표 설정</div>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <select value={tempGoalType} onChange={e=>setTempGoalType(e.target.value)}
+                style={{fontFamily:"var(--mono)",fontSize:12,background:"rgba(255,255,255,.08)",color:"rgba(255,255,255,.8)",border:"1px solid rgba(255,255,255,.15)",borderRadius:3,padding:"5px 8px"}}>
                 <option value="amount">금액 (원)</option>
                 <option value="books">권수 (권)</option>
               </select>
-              <input type="number" value={tempGoalValue} onChange={e => setTempGoalValue(e.target.value)}
-                style={{ flex:1, minWidth:80, fontFamily:"var(--mono)", fontSize:12, background:"#3a3428", color:"#d4c9a8", border:"1px solid #5a5040", borderRadius:3, padding:"5px 8px" }} />
-              <button onClick={saveGoal} className="btn btn-accent" style={{ padding:"5px 12px", fontSize:11 }}>저장</button>
-              <button onClick={() => setShowGoalEdit(false)} className="btn btn-ghost" style={{ padding:"5px 10px", fontSize:11, color:"#8a7e68", borderColor:"#5a5040" }}>취소</button>
+              <input type="number" value={tempGoalValue} onChange={e=>setTempGoalValue(e.target.value)}
+                style={{flex:1,minWidth:80,fontFamily:"var(--mono)",fontSize:12,background:"rgba(255,255,255,.08)",color:"rgba(255,255,255,.8)",border:"1px solid rgba(255,255,255,.15)",borderRadius:3,padding:"5px 8px"}} />
+              <button onClick={saveGoal}      className="btn btn-accent" style={{padding:"5px 12px",fontSize:11}}>저장</button>
+              <button onClick={()=>setShowGoalEdit(false)} className="btn btn-ghost" style={{padding:"5px 10px",fontSize:11,color:"rgba(255,255,255,.4)",borderColor:"rgba(255,255,255,.15)"}}>취소</button>
             </div>
           </div>
         )}
       </div>
 
-      {/* 본문 */}
-      <div style={{ background:"var(--card)", border:"1px solid var(--border)", borderTop:"none", borderRadius:"0 0 8px 8px", overflow:"hidden", boxShadow:"0 4px 16px rgba(0,0,0,.08)" }}>
-        <div className="grid-header" style={{ display:"grid", gridTemplateColumns:"82px 1fr 76px 88px", padding:"7px 14px", background:"#ece7da", borderBottom:"1px solid #d4ccba", fontFamily:"var(--mono)", fontSize:9, color:"var(--muted)", letterSpacing:1 }}>
-          <span>일자</span><span>도서 / 저자</span><span style={{textAlign:"right"}}>정가</span><span style={{textAlign:"right"}}>누적액</span>
-        </div>
+      {/* ── 탭 ── */}
+      <div style={{display:"flex",background:"var(--tab-bg)",borderLeft:"1px solid var(--border)",borderRight:"1px solid var(--border)"}}>
+        {[['list','내역'],['stats','통계']].map(([v,label])=>(
+          <button key={v} onClick={()=>setActiveView(v)} style={{
+            flex:1, padding:"8px 0", fontFamily:"var(--mono)", fontSize:11, fontWeight:700,
+            cursor:"pointer", border:"none", letterSpacing:1, transition:"all .1s",
+            background: activeView===v?"var(--card)":"transparent",
+            color: activeView===v?"var(--header)":"var(--muted)",
+            borderBottom: activeView===v?"2px solid var(--accent)":"2px solid transparent",
+          }}>{label}</button>
+        ))}
+      </div>
 
-        <div style={{ maxHeight:"calc(100vh - 240px)", minHeight:260, overflowY:"auto" }}>
-          {books.map((book,i) => (
-            <div key={book.id}>
-              <div className="row-item grid-row" style={{ display:"grid", gridTemplateColumns:"82px 1fr 76px 88px", padding:"8px 14px", borderBottom:"1px dotted #ddd6c8", alignItems:"center", animationDelay:`${i*.04}s` }}
-                onClick={() => setSelectedBook(selectedBook?.id===book.id ? null : book)}>
-                {editingDateId===book.id ? (
-                  <input type="date" defaultValue={book.date} autoFocus onClick={e=>e.stopPropagation()}
-                    onBlur={e=>updateBookDate(book.id,e.target.value)} onKeyDown={e=>{if(e.key==="Enter")updateBookDate(book.id,e.target.value);}}
-                    style={{ fontFamily:"var(--mono)", fontSize:10, color:"#5a4e3e", border:"1px solid #b8b0a0", borderRadius:2, background:"#fff", padding:"2px 3px", width:110 }} />
-                ) : (
-                  <span onClick={e=>{e.stopPropagation();setEditingDateId(book.id);}}
-                    style={{ fontFamily:"var(--mono)", fontSize:10, color:"#8a7e68", cursor:"text", borderBottom:"1px dashed transparent", paddingBottom:1 }}
-                    onMouseEnter={e=>e.target.style.borderBottomColor="#b0a590"} onMouseLeave={e=>e.target.style.borderBottomColor="transparent"}>{fdShort(book.date)}</span>
+      {/* ── 본문 ── */}
+      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderTop:"none",borderRadius:"0 0 8px 8px",overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,.07)"}}>
+
+        {/* ─── 내역 뷰 ─── */}
+        {activeView==='list' && <>
+          <div className="grid-header" style={{display:"grid",gridTemplateColumns:"82px 1fr 76px 88px",padding:"7px 14px",background:"var(--tab-bg)",borderBottom:"1px solid var(--border)",fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",letterSpacing:1}}>
+            <span>일자</span><span>도서 / 저자</span><span style={{textAlign:"right"}}>정가</span><span style={{textAlign:"right"}}>누적액</span>
+          </div>
+
+          <div style={{maxHeight:"calc(100vh - 300px)",minHeight:260,overflowY:"auto"}}>
+            {books.map((book,i)=>(
+              <div key={book.id}>
+                <div className="row-item grid-row" style={{display:"grid",gridTemplateColumns:"82px 1fr 76px 88px",padding:"8px 14px",borderBottom:"1px dotted var(--border)",alignItems:"center",animationDelay:`${i*.04}s`}}
+                  onClick={()=>setSelectedBook(selectedBook?.id===book.id?null:book)}>
+                  {editingDateId===book.id ? (
+                    <input type="date" defaultValue={book.date} autoFocus onClick={e=>e.stopPropagation()}
+                      onBlur={e=>updateBookDate(book.id,e.target.value)} onKeyDown={e=>{if(e.key==="Enter")updateBookDate(book.id,e.target.value);}}
+                      style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--text)",border:"1px solid var(--border)",borderRadius:2,background:"var(--card)",padding:"2px 3px",width:110}} />
+                  ) : (
+                    <span onClick={e=>{e.stopPropagation();setEditingDateId(book.id);}}
+                      style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--muted)",cursor:"text",borderBottom:"1px dashed transparent",paddingBottom:1}}
+                      onMouseEnter={e=>e.target.style.borderBottomColor="var(--border)"}
+                      onMouseLeave={e=>e.target.style.borderBottomColor="transparent"}>{fdShort(book.date)}</span>
+                  )}
+                  <div style={{minWidth:0}}>
+                    <div style={{fontFamily:"var(--serif)",fontSize:13,fontWeight:700,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{book.title}</div>
+                    <div style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",marginTop:1,opacity:.7}}>{book.author}</div>
+                  </div>
+                  <span style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--accent)",fontWeight:700,textAlign:"right"}}>{fp(book.price)}</span>
+                  <span style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--header)",fontWeight:700,textAlign:"right"}}>{fp(runningTotals[i])}</span>
+                </div>
+                {selectedBook?.id===book.id && (
+                  <div style={{padding:"10px 14px 10px 96px",background:"var(--detail-bg)",borderBottom:"1px dotted var(--border)",animation:"fadeIn .15s ease"}}>
+                    <div style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--muted)",lineHeight:1.8}}>
+                      출판: {book.publisher} &nbsp;│&nbsp; ISBN: {book.isbn||"—"} &nbsp;│&nbsp; 정가: ₩{fp(book.price)}
+                    </div>
+                    <button onClick={e=>{e.stopPropagation();deleteBook(book.id);}} className="btn btn-ghost" style={{marginTop:6,padding:"3px 10px",fontSize:9}}>삭제</button>
+                  </div>
                 )}
-                <div style={{ minWidth:0 }}>
-                  <div style={{ fontFamily:"var(--serif)", fontSize:13, fontWeight:700, color:"var(--text)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{book.title}</div>
-                  <div style={{ fontFamily:"var(--mono)", fontSize:9, color:"#a09585", marginTop:1 }}>{book.author}</div>
-                </div>
-                <span style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--accent)", fontWeight:700, textAlign:"right" }}>{fp(book.price)}</span>
-                <span style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--header)", fontWeight:700, textAlign:"right" }}>{fp(runningTotals[i])}</span>
               </div>
-              {selectedBook?.id===book.id && (
-                <div style={{ padding:"10px 14px 10px 96px", background:"#eee9dc", borderBottom:"1px dotted #ddd6c8", animation:"fadeIn .15s ease" }}>
-                  <div style={{ fontFamily:"var(--mono)", fontSize:10, color:"#6a6050", lineHeight:1.8 }}>
-                    출판: {book.publisher} &nbsp;│&nbsp; ISBN: {book.isbn||"—"} &nbsp;│&nbsp; 정가: ₩{fp(book.price)}
-                  </div>
-                  <button onClick={e=>{e.stopPropagation();deleteBook(book.id);}} className="btn btn-ghost" style={{ marginTop:6, padding:"3px 10px", fontSize:9, color:"#a09585" }}>삭제</button>
-                </div>
-              )}
-            </div>
-          ))}
-          {books.length<15 && Array.from({length:Math.max(2,15-books.length)}).map((_,i) => (
-            <div key={`e-${i}`} className="grid-row" style={{ display:"grid", gridTemplateColumns:"82px 1fr 76px 88px", padding:"8px 14px", borderBottom:"1px dotted #e8e2d4" }}>
-              <span style={{ fontFamily:"var(--mono)", fontSize:10, color:"#ddd6c8" }}>────.──.──</span>
-              <span style={{ fontFamily:"var(--mono)", fontSize:10, color:"#ddd6c8" }}>────────────</span>
-              <span style={{ fontFamily:"var(--mono)", fontSize:10, color:"#ddd6c8", textAlign:"right" }}>──────</span>
-              <span style={{ fontFamily:"var(--mono)", fontSize:10, color:"#ddd6c8", textAlign:"right" }}>──────</span>
-            </div>
-          ))}
-        </div>
+            ))}
+            {books.length<15 && Array.from({length:Math.max(2,15-books.length)}).map((_,i)=>(
+              <div key={`e-${i}`} className="grid-row" style={{display:"grid",gridTemplateColumns:"82px 1fr 76px 88px",padding:"8px 14px",borderBottom:"1px dotted var(--border)",opacity:.35}}>
+                <span style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--border)"}}>────.──.──</span>
+                <span style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--border)"}}>────────────</span>
+                <span style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--border)",textAlign:"right"}}>──────</span>
+                <span style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--border)",textAlign:"right"}}>──────</span>
+              </div>
+            ))}
+          </div>
 
-        {/* 등록 */}
-        <div style={{ padding:"10px 14px", borderTop:"2px solid #d4ccba", background:"#ece7da" }}>
-          {!showForm ? (
-            <button onClick={() => { setShowForm(true); if(ttbKey) setTimeout(()=>searchInputRef.current?.focus(),80); else setManualMode(true); }}
-              className="btn btn-primary" style={{ width:"100%", padding:9, fontSize:12, letterSpacing:1 }}>+ 기록하기</button>
-          ) : (
-            <div style={{ animation:"fadeIn .15s ease" }}>
-              {!manualMode && ttbKey ? (
-                <>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <span style={{ fontFamily:"var(--mono)", fontSize:12, fontWeight:700, color:"var(--header)" }}>도서 검색</span>
-                      <span style={{ fontFamily:"var(--mono)", fontSize:8, color:"var(--accent)", background:"#e0ecd0", padding:"1px 5px", borderRadius:2 }}>알라딘</span>
+          {/* 등록 */}
+          <div style={{padding:"10px 14px",borderTop:"2px solid var(--border)",background:"var(--sub-bg)"}}>
+            {!showForm ? (
+              <button onClick={()=>{setShowForm(true);if(ttbKey)setTimeout(()=>searchInputRef.current?.focus(),80);else setManualMode(true);}}
+                className="btn btn-primary" style={{width:"100%",padding:9,fontSize:12,letterSpacing:1}}>+ 기록하기</button>
+            ) : (
+              <div style={{animation:"fadeIn .15s ease"}}>
+                {!manualMode && ttbKey ? (
+                  <>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontFamily:"var(--mono)",fontSize:12,fontWeight:700,color:"var(--header)"}}>도서 검색</span>
+                        <span style={{fontFamily:"var(--mono)",fontSize:8,color:"var(--accent)",background:"var(--row-hover)",padding:"1px 5px",borderRadius:2}}>알라딘</span>
+                      </div>
+                      <button onClick={()=>setManualMode(true)} style={{background:"none",border:"none",fontFamily:"var(--mono)",fontSize:10,color:"var(--muted)",cursor:"pointer",textDecoration:"underline"}}>직접입력</button>
                     </div>
-                    <button onClick={()=>setManualMode(true)} style={{ background:"none", border:"none", fontFamily:"var(--mono)", fontSize:10, color:"var(--muted)", cursor:"pointer", textDecoration:"underline" }}>직접입력</button>
-                  </div>
-                  <div style={{ display:"flex", gap:6, marginBottom:8 }}>
-                    <input ref={searchInputRef} type="text" className="input" placeholder="도서명 입력" value={searchQuery}
-                      onChange={e=>setSearchQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSearch()} style={{ flex:1 }} />
-                    <button onClick={handleSearch} disabled={searching} className="btn btn-primary" style={{ padding:"7px 14px", fontSize:11, whiteSpace:"nowrap" }}>{searching?"···":"검색"}</button>
-                  </div>
-                  <div style={{ marginBottom:8 }}>
-                    <label style={{ fontFamily:"var(--mono)", fontSize:9, color:"var(--muted)", display:"block", marginBottom:2 }}>대출일</label>
-                    <input type="date" className="input" value={formDate} onChange={e=>setFormDate(e.target.value)} />
-                  </div>
-                  {searching && <div style={{ padding:"12px 0", textAlign:"center", fontFamily:"var(--mono)", fontSize:11, color:"var(--muted)" }}><span className="blink-dot">●</span> 알라딘 검색 중...</div>}
-                  {searchError && (
-                    <div style={{ padding:8, background:"#f0e8d8", borderRadius:3, fontFamily:"var(--mono)", fontSize:11, color:"#8a6a40", textAlign:"center", marginBottom:6 }}>
-                      {searchError}
-                      <button onClick={()=>setManualMode(true)} className="btn btn-ghost" style={{ display:"block", margin:"6px auto 0", padding:"3px 12px", fontSize:10 }}>직접 입력</button>
+                    <div style={{display:"flex",gap:6,marginBottom:8}}>
+                      <input ref={searchInputRef} type="text" className="input" placeholder="도서명 입력" value={searchQuery}
+                        onChange={e=>setSearchQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSearch()} style={{flex:1}} />
+                      <button onClick={handleSearch} disabled={searching} className="btn btn-primary" style={{padding:"7px 14px",fontSize:11,whiteSpace:"nowrap"}}>{searching?"···":"검색"}</button>
                     </div>
-                  )}
-                  {searchResults.length>0 && (
-                    <div style={{ marginBottom:6 }}>
-                      <div style={{ fontFamily:"var(--mono)", fontSize:9, color:"var(--muted)", marginBottom:6 }}>{searchResults.length}건 — 선택하여 등록</div>
-                      {searchResults.map((r,i) => (
-                        <div key={i} className="search-card" onClick={()=>addFromResult(r)} style={{ padding:"9px 10px", background:"#faf8f2", marginBottom:4, borderRadius:3, border:"1px solid #d4ccba", display:"flex", gap:10 }}>
-                          {r.cover && <img src={r.cover} alt="" style={{ width:40, height:56, objectFit:"cover", borderRadius:2, flexShrink:0 }} onError={e=>e.target.style.display="none"} />}
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontFamily:"var(--serif)", fontSize:13, fontWeight:700, color:"var(--text)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.title}</div>
-                                <div style={{ fontFamily:"var(--mono)", fontSize:10, color:"var(--muted)", marginTop:2 }}>{r.author} · {r.publisher}</div>
+                    <div style={{marginBottom:8}}>
+                      <label style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",display:"block",marginBottom:2}}>대출일</label>
+                      <input type="date" className="input" value={formDate} onChange={e=>setFormDate(e.target.value)} />
+                    </div>
+                    {searching && <div style={{padding:"12px 0",textAlign:"center",fontFamily:"var(--mono)",fontSize:11,color:"var(--muted)"}}><span className="blink-dot">●</span> 알라딘 검색 중...</div>}
+                    {searchError && (
+                      <div style={{padding:8,background:"var(--detail-bg)",borderRadius:3,fontFamily:"var(--mono)",fontSize:11,color:"var(--muted)",textAlign:"center",marginBottom:6}}>
+                        {searchError}
+                        <button onClick={()=>setManualMode(true)} className="btn btn-ghost" style={{display:"block",margin:"6px auto 0",padding:"3px 12px",fontSize:10}}>직접 입력</button>
+                      </div>
+                    )}
+                    {searchResults.length>0 && (
+                      <div style={{marginBottom:6}}>
+                        <div style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",marginBottom:6}}>{searchResults.length}건 — 선택하여 등록</div>
+                        {searchResults.map((r,i)=>(
+                          <div key={i} className="search-card" onClick={()=>addFromResult(r)} style={{padding:"9px 10px",background:"var(--search-bg)",marginBottom:4,borderRadius:3,border:"1px solid var(--border)",display:"flex",gap:10}}>
+                            {r.cover && <img src={r.cover} alt="" style={{width:40,height:56,objectFit:"cover",borderRadius:2,flexShrink:0}} onError={e=>e.target.style.display="none"} />}
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontFamily:"var(--serif)",fontSize:13,fontWeight:700,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.title}</div>
+                                  <div style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--muted)",marginTop:2}}>{r.author} · {r.publisher}</div>
+                                </div>
+                                <div style={{fontFamily:"var(--mono)",fontSize:12,fontWeight:700,color:"var(--accent)",marginLeft:8,whiteSpace:"nowrap"}}>₩{fp(r.price)}</div>
                               </div>
-                              <div style={{ fontFamily:"var(--mono)", fontSize:12, fontWeight:700, color:"var(--accent)", marginLeft:8, whiteSpace:"nowrap" }}>₩{fp(r.price)}</div>
+                              {r.isbn && <div style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",marginTop:2,opacity:.6}}>ISBN {r.isbn}</div>}
                             </div>
-                            {r.isbn && <div style={{ fontFamily:"var(--mono)", fontSize:9, color:"#b0a590", marginTop:2 }}>ISBN {r.isbn}</div>}
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                    )}
+                    <button onClick={resetForm} className="btn btn-ghost" style={{width:"100%",marginTop:4,padding:7,fontSize:11}}>취소</button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <span style={{fontFamily:"var(--mono)",fontSize:12,fontWeight:700,color:"var(--header)"}}>직접 입력</span>
+                      {ttbKey && <button onClick={()=>setManualMode(false)} style={{background:"none",border:"none",fontFamily:"var(--mono)",fontSize:10,color:"var(--muted)",cursor:"pointer",textDecoration:"underline"}}>검색</button>}
                     </div>
-                  )}
-                  <button onClick={resetForm} className="btn btn-ghost" style={{ width:"100%", marginTop:4, padding:7, fontSize:11 }}>취소</button>
-                </>
-              ) : (
-                <>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                    <span style={{ fontFamily:"var(--mono)", fontSize:12, fontWeight:700, color:"var(--header)" }}>직접 입력</span>
-                    {ttbKey && <button onClick={()=>setManualMode(false)} style={{ background:"none", border:"none", fontFamily:"var(--mono)", fontSize:10, color:"var(--muted)", cursor:"pointer", textDecoration:"underline" }}>검색</button>}
-                  </div>
-                  {[
-                    {key:"title",label:"도서명 *",placeholder:"소년이 온다"},
-                    {key:"author",label:"저자",placeholder:"한강"},
-                    {key:"publisher",label:"출판사",placeholder:"창비"},
-                    {key:"isbn",label:"ISBN",placeholder:"9788936434595"},
-                    {key:"price",label:"정가(원) *",placeholder:"13000",type:"number"},
-                    {key:"date",label:"대출일",type:"date"},
-                  ].map(f => (
-                    <div key={f.key} style={{ marginBottom:7 }}>
-                      <label style={{ fontFamily:"var(--mono)", fontSize:9, color:"var(--muted)", display:"block", marginBottom:2 }}>{f.label}</label>
-                      <input type={f.type||"text"} className="input" placeholder={f.placeholder} value={manualForm[f.key]} onChange={e=>setManualForm({...manualForm,[f.key]:e.target.value})} />
+                    {[
+                      {key:"title",  label:"도서명 *", placeholder:"소년이 온다"},
+                      {key:"author", label:"저자",     placeholder:"한강"},
+                      {key:"publisher",label:"출판사", placeholder:"창비"},
+                      {key:"isbn",   label:"ISBN",     placeholder:"9788936434595"},
+                      {key:"price",  label:"정가(원) *",placeholder:"13000",type:"number"},
+                      {key:"date",   label:"대출일",   type:"date"},
+                    ].map(f=>(
+                      <div key={f.key} style={{marginBottom:7}}>
+                        <label style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",display:"block",marginBottom:2}}>{f.label}</label>
+                        <input type={f.type||"text"} className="input" placeholder={f.placeholder} value={manualForm[f.key]} onChange={e=>setManualForm({...manualForm,[f.key]:e.target.value})} />
+                      </div>
+                    ))}
+                    <div style={{display:"flex",gap:6,marginTop:10}}>
+                      <button onClick={addManual} className="btn btn-primary" style={{flex:1,padding:8,fontSize:11}}>등록</button>
+                      <button onClick={resetForm} className="btn btn-ghost"   style={{flex:1,padding:8,fontSize:11}}>취소</button>
                     </div>
-                  ))}
-                  <div style={{ display:"flex", gap:6, marginTop:10 }}>
-                    <button onClick={addManual} className="btn btn-primary" style={{ flex:1, padding:8, fontSize:11 }}>등록</button>
-                    <button onClick={resetForm} className="btn btn-ghost" style={{ flex:1, padding:8, fontSize:11 }}>취소</button>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </>}
+
+        {/* ─── 통계 뷰 ─── */}
+        {activeView==='stats' && (
+          <div style={{padding:"14px 16px",animation:"fadeIn .2s ease"}}>
+
+            {allYears.length>1 && (
+              <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+                {allYears.map(y=>(
+                  <button key={y} onClick={()=>setStatsYear(Number(y))}
+                    className={statsYear===Number(y)?"btn btn-primary":"btn btn-ghost"}
+                    style={{padding:"4px 12px",fontSize:11}}>{y}년</button>
+                ))}
+              </div>
+            )}
+
+            {/* 연간 요약 */}
+            <div style={{background:"var(--tab-bg)",borderRadius:6,padding:"12px 14px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",marginBottom:3,letterSpacing:1}}>{statsYear}년 독서 현황</div>
+                <div style={{fontFamily:"var(--mono)",fontSize:20,fontWeight:700,color:"var(--header)",lineHeight:1}}>{yearCount}<span style={{fontSize:11,marginLeft:3}}>권</span></div>
+              </div>
+              <div style={{width:"1px",height:36,background:"var(--border)"}} />
+              <div style={{textAlign:"right"}}>
+                <div style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",marginBottom:3,letterSpacing:1}}>절약 금액</div>
+                <div style={{fontFamily:"var(--mono)",fontSize:20,fontWeight:700,color:"var(--accent)",lineHeight:1}}>₩{fp(yearTotal)}</div>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* 월별 바 차트 */}
+            <div style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)",letterSpacing:1,marginBottom:10}}>월별 현황</div>
+            {monthlyStats.map(s=>{
+              const pct = s.total>0?(s.total/maxMonthTotal)*100:0;
+              const isMax = s.total>0 && s.total===maxMonthTotal;
+              return (
+                <div key={s.month} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                  <span style={{fontFamily:"var(--mono)",fontSize:10,color:s.count>0?"var(--text)":"var(--muted)",width:26,flexShrink:0,textAlign:"right",opacity:s.count>0?1:.5}}>
+                    {String(s.month).padStart(2,'0')}월
+                  </span>
+                  <div style={{flex:1,height:18,background:"var(--tab-bg)",borderRadius:3,overflow:"hidden"}}>
+                    {pct>0 && (
+                      <div style={{height:"100%",width:`${pct}%`,background:isMax?"var(--accent)":"var(--accent-light)",borderRadius:3,transition:"width .6s ease",display:"flex",alignItems:"center",paddingLeft:6}}>
+                        {pct>28 && <span style={{fontFamily:"var(--mono)",fontSize:8,color:isMax?"rgba(255,255,255,.9)":"rgba(0,0,0,.5)",whiteSpace:"nowrap"}}>{s.count}권</span>}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{fontFamily:"var(--mono)",fontSize:10,color:s.count>0?"var(--accent)":"var(--border)",width:64,textAlign:"right",flexShrink:0}}>
+                    {s.count>0?`₩${fp(s.total)}`:"—"}
+                  </span>
+                </div>
+              );
+            })}
+
+            <div style={{borderTop:"1px solid var(--border)",marginTop:12,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontFamily:"var(--mono)",fontSize:10,fontWeight:700,color:"var(--header)"}}>합계</span>
+              <div style={{display:"flex",gap:14}}>
+                <span style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--text)"}}>{yearCount}권</span>
+                <span style={{fontFamily:"var(--mono)",fontSize:10,fontWeight:700,color:"var(--accent)"}}>₩{fp(yearTotal)}</span>
+              </div>
+            </div>
+
+            {activeMonths.length>0 && (
+              <div style={{marginTop:8,padding:"8px 10px",background:"var(--tab-bg)",borderRadius:4}}>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)"}}>월평균 ({activeMonths.length}개월)</span>
+                  <span style={{fontFamily:"var(--mono)",fontSize:9,color:"var(--muted)"}}>
+                    {(yearCount/activeMonths.length).toFixed(1)}권 · ₩{fp(Math.round(yearTotal/activeMonths.length))}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {yearCount===0 && (
+              <div style={{textAlign:"center",padding:"24px 0",fontFamily:"var(--mono)",fontSize:11,color:"var(--muted)"}}>
+                {statsYear}년 기록이 없습니다
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 푸터 */}
-      <div style={{ textAlign:"center", padding:"12px 0", fontFamily:"var(--mono)", fontSize:8, color:"#a09585" }}>
-        독서통장 v1.0 · 데이터는 이 브라우저에 저장됩니다
+      <div style={{textAlign:"center",padding:"12px 0",fontFamily:"var(--mono)",fontSize:8,color:"var(--muted)",opacity:.6}}>
+        독서통장 v1.2 · 데이터는 이 브라우저에 저장됩니다
       </div>
     </div>
   );
 }
-
-// CSS 변수를 JS에서 참조하기 위한 상수
-const var_card = "#f5f1e8";
-const var_border = "#c9c0ae";
-const var_header = "#3a3428";
 
 ReactDOM.createRoot(document.getElementById("app")).render(<App />);
 </script>
