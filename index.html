@@ -220,7 +220,7 @@ function App() {
       await searchAladin("테스트", keyInput.trim());
       const k=keyInput.trim(); setTtbKey(k); setKeyVerified(true);
       try { sessionStorage.setItem(KEY_STORAGE,k); } catch {}
-    } catch { setKeyError("키 인증에 실패했습니다. TTB 키를 확인해 주세요."); }
+    } catch(e) { setKeyError(`오류: ${e?.message || String(e)}`); }
     setVerifying(false);
   };
 
