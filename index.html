@@ -143,7 +143,7 @@ async function searchAladin(query, ttbKey) {
     const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(apiUrl)}`, {
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error("api error");
+    if (!res.ok) throw new Error(`api error ${res.status}`);
     const data = await res.json();
     return data?.item || [];
   } finally {
